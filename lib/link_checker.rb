@@ -1,12 +1,14 @@
 require 'find'
-require 'nokogiri'
 require 'net/http'
 require 'net/https'
 require 'uri'
 require 'colorize'
 require 'anemone'
+require 'open-uri'
 
 class LinkChecker
+
+  URL_REGEXP = Regexp.new("https?://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]")
 
   # Create a new instance of LinkChecker
   #
@@ -24,7 +26,7 @@ class LinkChecker
     @warnings = []
     @return_code = 0
 
-    @options[:max_threads] ||= 4
+    @options[:max_threads] ||= 1
   end
 
   # Find a list of HTML files in the @target path, which was set in the {#initialize} method.
@@ -39,10 +41,7 @@ class LinkChecker
   # @param source [String] Either a file path or a URL.
   # @return [Array] A list of URI strings.
   def self.external_link_uri_strings(source)
-    Nokogiri::HTML(source).css('a').select {|link|
-        !link.attribute('href').nil? &&
-        link.attribute('href').value =~ /^https?\:\/\//
-    }.map{|link| link.attributes['href'].value }
+    open(source).read.scan(URL_REGEXP).uniq
   end
 
   # Check one URL.
@@ -71,7 +70,7 @@ class LinkChecker
               # If the redirect is relative we need to build a new uri
               # using the current uri as a base.
               URI.join("#{uri.scheme}://#{uri.host}:#{uri.port}", response['location'])
-            end          
+            end
           return self.check_uri(uri, true)
         else
           return Error.new(:uri_string => uri.to_s, :error => response)
@@ -167,7 +166,7 @@ class LinkChecker
       report_results(page_name, results)
     end
   end
-  
+
   # Report the results of scanning one HTML page.
   #
   # @param page_name [String] The name of the page.
@@ -269,7 +268,7 @@ class LinkChecker
     until Thread.list.select {|thread| thread.status == "run"}.count <
       (1 + @options[:max_threads]) do
       # Wait 5 milliseconds before trying again.
-      sleep 0.005
+      sleep 0.05
     end
   end
 
